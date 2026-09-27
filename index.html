@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة الهجوم والاشتباكات المصغرة</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #111;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-family: Tahoma, sans-serif;
+        }
+        canvas {
+            border: 2px solid #fff;
+            background-color: #222;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+        }
+        .instructions {
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="instructions">
+        استخدم أزرار <strong>W, A, S, D</strong> للحركة | استخدم <strong>المؤشر والماوس</strong> للتصويب والإطلاق.
+    </div>
+    
+    <canvas id="gameCanvas" width="800" height="500"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // إعدادات اللاعب
+        let player = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 15,
+            color: "#00ffcc",
+            speed: 4,
+            health: 100
+        };
+
+        let keys = {};
+        let mouse = { x: 0, y: 0 };
+        let bullets = [];
+        let enemies = [];
+        let score = 0;
+        let gameOver = false;
+
+        // استقبال المدخلات (لوحة المفاتيح والماوس)
+        window.addEventListener("keydown", (e) => keys[e.key.toLowerCase()] = true);
+        window.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
+        
+        canvas.addEventListener("mousemove", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = e.clientX - rect.left;
+            mouse.y = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener("click", () => {
+            if (gameOver) {
+                resetGame();
+                return;
+            }
+            // إطلاق طلقة باتجاه الماوس
+            const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+            bullets.push({
+                x: player.x,
+                y: player.y,
+                dx: Math.cos(angle) * 7,
+                dy: Math.sin(angle) * 7,
+                radius: 4,
+                color: "#ff0"
+            });
+        });
+
+        // إنشاء الأعداء كل فترة
+        setInterval(() => {
+            if (gameOver) return;
+            let edge = Math.floor(Math.random() * 4);
+            let ex, ey;
+            if (edge === 0) { ex = Math.random() * canvas.width; ey = -20; }
+            else if (edge === 1) { ex = Math.random() * canvas.width; ey = canvas.height + 20; }
+            else if (edge === 2) { ex = -20; ey = Math.random() * canvas.height; }
+            else { ex = canvas.width + 20; ey = Math.random() * canvas.height; }
+
+            enemies.push({
+                x: ex,
+                y: ey,
+                radius: 12,
+                color: "#ff3366",
+                speed: 1.5
+            });
+        }, 1500);
+
+        function resetGame() {
+            player.health = 100;
+            score = 0;
+            bullets = [];
+            enemies = [];
+            gameOver = false;
+            loop();
+        }
+
+        // تحديث منطق اللعبة
+        function update() {
+            if (gameOver) return;
+
+            // حركة اللاعب
+            if (keys['w'] && player.y - player.radius > 0) player.y -= player.speed;
+            if (keys['s'] && player.y + player.radius < canvas.height) player.y += player.speed;
+            if (keys['a'] && player.x - player.radius > 0) player.x -= player.speed;
+            if (keys['d'] && player.x + player.radius < canvas.width) player.x += player.speed;
+
+            // تحديث الطلقات
+            bullets.forEach((b, index) => {
+                b.x += b.dx;
+                b.y += b.dy;
+                // حذف الطلقات التي تخرج عن الشاشة
+                if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+                    bullets.splice(index, 1);
+                }
+            });
+
+            // تحديث الأعداء
+            enemies.forEach((enemy, eIndex) => {
+                const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+                enemy.x += Math.cos(angle) * enemy.speed;
+                enemy.y += Math.sin(angle) * enemy.speed;
+
+                // الاصطدام باللاعب
+                const distPlayer = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+                if (distPlayer < player.radius + enemy.radius) {
+                    player.health -= 1;
+                    if (player.health <= 0) {
+                        gameOver = true;
+                    }
+                }
+
+                // الاصطدام بالطلقات
+                bullets.forEach((bullet, bIndex) => {
+                    const distBullet = Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y);
+                    if (distBullet < bullet.radius + enemy.radius) {
+                        enemies.splice(eIndex, 1);
+                        bullets.splice(bIndex, 1);
+                        score += 10;
+                    }
+                });
+            });
+        }
+
+        // رسم عناصر اللعبة
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // رسم اللاعب
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fillStyle = player.color;
+            ctx.fill();
+            ctx.closePath();
+
+            // رسم الطلقات
+            bullets.forEach(b => {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+                ctx.fillStyle = b.color;
+                ctx.fill();
+                ctx.closePath();
+            });
+
+            // رسم الأعداء
+            enemies.forEach(e => {
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+                ctx.fillStyle = e.color;
+                ctx.fill();
+                ctx.closePath();
+            });
+
+            // رسم واجهة المستخدم (النقاط والصحة)
+            ctx.fillStyle = "#fff";
+            ctx.font = "16px Tahoma";
+            ctx.fillText(`النقاط: ${score}`, 20, 30);
+            ctx.fillText(`الصحة: ${player.health}%`, 20, 60);
+
+            // شاشة النهاية
+            if (gameOver) {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = "#ff3366";
+                ctx.font = "30px Tahoma";
+                ctx.textAlign = "center";
+                ctx.fillText("انتهت اللعبة!", canvas.width / 2, canvas.height / 2 - 20);
+
+                ctx.fillStyle = "#fff";
+                ctx.font = "16px Tahoma";
+                ctx.fillText("انقر بالماوس لإعادة المحاولة", canvas.width / 2, canvas.height / 2 + 20);
+                ctx.textAlign = "left"; // إعادة الضبط
+            }
+        }
+
+        // حلقة اللعبة الأساسية
+        function loop() {
+            update();
+            draw();
+            if (!gameOver) {
+                requestAnimationFrame(loop);
+            }
+        }
+
+        loop();
+    </script>
+</body>
+</html>
